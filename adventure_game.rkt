@@ -110,7 +110,7 @@
 ;                                          
 ;; -----------------------------------------------------------------------------
 
-game-world current_map adventurer (Listof Monsters)(Listof Items)(Numberof Gold)
+;;game-world current_map adventurer (Listof Monsters)(Listof Items)(Numberof Gold)
 
 ;; Start the Game
 (define (start-quest)
@@ -126,4 +126,37 @@ game-world current_map adventurer (Listof Monsters)(Listof Items)(Numberof Gold)
             (on-tick next-game-world TICK-RATE)
             (on-key direct-avatar)
             (to-draw render-game-world)
-            (stop-when dead? render-end)))
+            (stop-when dead? render-end))))
+
+;; Game-world -> Game-world
+(define (next-game-world world)
+  (define adventurer (game-world-adventurer world))
+  (define monsters  (game-world-monsters world))
+  (define goo-to-eat (can-eat snake goos))
+  (if item-to-pickup
+      (game-world adventurer (pickup world_items_list item-to-pickup))
+      (game-world adventurer worlds_item_list)))
+
+;; Game-world KeyEvent -> Game-world
+;; Handle a key event
+(define (direct-avatar world input_key)
+  (cond [(dir? input_key) (world-change-dir world input_key)]
+        [else world]))
+
+;; Game-world -> Scene
+;; Render the world as a scene
+(define (render-game-world world)
+  (adventurer+scene (game-world-adventurer world)
+               (item-list+scene (game-world-world_items_list world) MT-SCENE)))
+
+;; Game-world -> Boolean
+;; Is the adventurer dead?
+(define (dead? world)
+  (define adventurer (game-world-adventurer world))
+  (or (zero-health? adventurer) (wall-colliding? adventurer)))
+
+;; Game-world -> Scene
+;; overlays the gameover scene
+(define (render-end w)
+  (overlay (text "Game over" ENDGAME-TEXT-SIZE "black")
+           (render-game-world w)))
