@@ -40,19 +40,17 @@
 ;; Data Definitions
 ;; -----------------------------------------------------------------------------
 
-;; Game World is a (game-world current_map adventurer (Listof Monsters)(Listof Items)(Numberof Gold))
-;;(struct game-world (current_map adventurer monsters items world_gold) #:transparent)
-(struct game-world (adventurer world_gold) #:transparent #:mutable)
-
+;; Game World is a (game-world current_map (Listof adventurers) (Listof Monsters)(Listof Items)(Numberof Gold))
+(struct game-world (current_map adventurers monsters items) #:transparent #:mutable)
 
 ;; Adventurer is a (make-adventurer Health (cons Items [Listof Items]) Gold Direction Location)
 ;; - Health is just an integer value between 0-100
 ;; - Gold is also just an integer but does not max out at 100
 ;; - Direction is the direction the adventurer is facing in the game_world, viz., "up" "down" "left" "right".
 ;; - Location is the (posn Number_x Number_y) of the adventurer in the game_world
-;;(struct adventurer (health items gold direction location) #:transparent)
-(struct adventurer (health direction gold location) #:transparent #:mutable)
-(struct monster (health items gold direction location) #:transparent)
+;;(struct adventurer (health items direction location) #:transparent)
+(struct adventurer (health items direction location avatar_image) #:transparent #:mutable)
+(struct monster (health items direction location) #:transparent #:mutable)
 (struct posn (x y) #:transparent)
 
 
@@ -69,28 +67,28 @@
 ;; Adventurer Constants
 (define AVATAR-SIZE 15)
 (define MAX-HEALTH 100)
-(define DEFAULT-GOLD 100)
-(define DEFAULT-ITEMS (list 'basic sword'))
+(define DEFAULT-GOLD 0)
+(define DEFAULT-ITEMS (list 'basic_sword))
 
 ;; Monster Constants
 (define LRG-MONSTER-SIZE 25)
-(define MED-MONSTER-SIZE 15)
-(define SML-MONSTER-SIZE 5) ;; this may be too small but could be fun to trick an adventurer into a fight!
+(define MONSTER-SIZE 15)
 (define MAX-MONSTERS 5) ;; max monsters necessary?
 
 ;; GRAPHICAL BOARD
 (define WIDTH-PX  (* AVATAR-SIZE 30))
 (define HEIGHT-PX (* AVATAR-SIZE 30))
 
+;; DEFAULT MAP
+;; This is currently the same as the empty scene setup as temp until we make a default one that is different.
+(define DEFAULT_MAP (empty-scene WIDTH-PX HEIGHT-PX))
+
 ;; Visual constants
 (define EMPTY-SCENE (empty-scene WIDTH-PX HEIGHT-PX))
 (define MONSTER-IMG (bitmap "graphics/monster.gif"))
 (define GOLD-IMG  (bitmap "graphics/gold.gif"))
-(define AVATAR-IMG (bitmap "graphics/avatar.gif"))
 (define AVATAR-LEFT-IMG (bitmap "graphics/avatar-left.gif"))
-(define AVATAR-DOWN-IMG (bitmap "graphics/avatar-down.gif"))
 (define AVATAR-RIGHT-IMG (flip-horizontal AVATAR-LEFT-IMG)) ;; this might need to not be flipped but be a separate image all together
-(define AVATAR-UP-IMG (bitmap "graphics/avatar-up.gif"))
 
 ;                                          
 ;                                          
@@ -117,14 +115,11 @@
 ;; Start the Game
 (define (start-quest)
   (big-bang (game-world 
-                 (current-map (default_map)) 
-                 (adventurer MAX-HEALTH DEFAULT-ITEMS DEFAULT-GOLD "down" (list (posn 1 1)))
-                 (list (spawn-monster)
-                       (spawn-monster)
-                       (spawn-monster)
-                       (spawn-monster)
-                       (spawn-monster)
-                       (spawn-monster))
+                 (current-map (DEFAULT_MAP)) 
+                 (adventurer MAX-HEALTH DEFAULT-ITEMS "down" (list (posn 1 1) AVATAR-LEFT-IMG))
+                 ;;(list (spawn-monster))
+                 '() ;; no monsters should be empty list
+                 '() ;; items - none for now
             (on-tick next-game-world TICK-RATE)
             (on-key direct-avatar)
             (to-draw render-game-world)
@@ -132,9 +127,11 @@
 
 ;; Game-world -> Game-world
 (define (next-game-world world)
-  (define adventurer (game-world-adventurer world))
-  ;;(define monsters  (game-world-monsters world)) ;; when adding monsters, re-add this
-  (define item-to-pickup (can-pickup adventurer world_items_list))
+  (define current_map (game-world-current_map world));; the current map being drawn
+  (define adventurer (game-world-adventurer world)) ;; a list of players in the world
+  (define monsters  (game-world-monsters world)) ;; a list of monsters in the current game world
+  (define items (game-world-items world)) ;; a list of the current game world items
+  (define item-to-pickup (can-pickup adventurer items))
   (if item-to-pickup
       (game-world adventurer (pickup world_items_list item-to-pickup))
       (game-world adventurer worlds_item_list)))
@@ -201,13 +198,13 @@
 (define (heal? x) (string=? x "h"))
 
 
-;; Game-world Direction or Move -> Game-world
-;; Change the direction or move in that direction
-;; > (world-dir-or-mv world0 "up")
+;; Game-world Move -> Game-world
+;; Move in a direction
+;; > (world-player-move world0 "up")
 ;; (game-world adventurer1 (list items)) 
 
-(define (world-dir-or-mv world direction)
-  (define the-adventurer (game-world-adventurer world))
+(define (world-player-move world player direction)
+  (define the-adventurer (game-world-adventurer-player world))
      (game-world (adventurer-change-dir the-adventurer direction) world_gold))
 
 (define (world-heal-adventurer world)
@@ -245,7 +242,7 @@
 
 (define (legal-move=? avatar direction)
     (if (= move-adv-loc obs)
-      
+
     )
 )
 
