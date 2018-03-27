@@ -110,13 +110,18 @@
 ;                                          
 ;; -----------------------------------------------------------------------------
 
-;;game-world current_map adventurer (Listof Monsters)(Listof Items)(Numberof Gold)
+;; Contract: start-quest: none -> none
 
+;; Purpose: starts the game in bigbang and is the main game loop
+
+;; Example: (start-quest)
+
+;; Definition: 
 ;; Start the Game
 (define (start-quest)
   (big-bang (game-world 
                  (current-map (DEFAULT_MAP)) 
-                 (adventurer MAX-HEALTH DEFAULT-ITEMS "down" (list (posn 1 1) AVATAR-LEFT-IMG))
+                 (list (adventurer MAX-HEALTH DEFAULT-ITEMS "down" (list (posn 1 1) AVATAR-LEFT-IMG)))
                  ;;(list (spawn-monster))
                  '() ;; no monsters should be empty list
                  '() ;; items - none for now
@@ -125,13 +130,20 @@
             (to-draw render-game-world)
             (stop-when dead? render-end))))
 
+;; Contract: next-game-world: world --> world
+
+;; Purpose: starts the game in bigbang and is the main game loop
+
+;; Example: (start-quest)
+
+;; Definition: 
 ;; Game-world -> Game-world
 (define (next-game-world world)
   (define current_map (game-world-current_map world));; the current map being drawn
-  (define adventurer (game-world-adventurer world)) ;; a list of players in the world
+  (define adventurers (game-world-adventurers world)) ;; a list of players in the world
   (define monsters  (game-world-monsters world)) ;; a list of monsters in the current game world
   (define items (game-world-items world)) ;; a list of the current game world items
-  (define item-to-pickup (can-pickup adventurer items))
+  (define item-to-pickup (can-pickup adventurers items))
   (if item-to-pickup
       (game-world adventurer (pickup world_items_list item-to-pickup))
       (game-world adventurer worlds_item_list)))
@@ -146,13 +158,13 @@
 ;; Game-world -> Scene
 ;; Render the world as a scene
 (define (render-game-world world)
-  (adventurer+scene (game-world-adventurer world)
-               (item-list+scene (game-world-world_items_list world) EMPTY-SCENE)))
+  (adventurers+scene (game-world-adventurer world)
+               (items-list+scene (game-world-items world) EMPTY-SCENE)))
 
 ;; Game-world -> Boolean
 ;; Is the adventurer dead?
 (define (dead? world)
-  (define adventurer (game-world-adventurer world))
+  (define adventurers (game-world-adventurer world))
   (or (zero-health? adventurer) (wall-colliding? adventurer)))
 
 ;; Game-world -> Scene
