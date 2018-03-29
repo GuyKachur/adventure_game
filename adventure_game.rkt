@@ -41,7 +41,7 @@
 ;; -----------------------------------------------------------------------------
 
 ;; Game World is a (game-world current_map (Listof adventurers) (Listof Monsters)(Listof Items)(Numberof Gold))
-(struct game-world (current_map adventurers monsters items) #:transparent #:mutable)
+(struct game-world (current_map adventurer items) #:transparent #:mutable)
 
 ;; Adventurer is a (make-adventurer Health (cons Items [Listof Items]) Gold Direction Location)
 ;; - Health is just an integer value between 0-100
@@ -49,9 +49,9 @@
 ;; - Direction is the direction the adventurer is facing in the game_world, viz., "up" "down" "left" "right".
 ;; - Location is the (posn Number_x Number_y) of the adventurer in the game_world
 ;;(struct adventurer (health items direction location) #:transparent)
-(struct adventurer (health items direction location avatar_image) #:transparent #:mutable)
-(struct monster (health items direction location) #:transparent #:mutable)
-(struct posn (x y) #:transparent)
+(struct adventurer (name health items direction location image) #:transparent #:mutable)
+(struct location (x y) #:transparent #:mutable)
+(struct item (name location size image health solid)#:transparent #:mutable) ;; im thinking health we can control for decay.
 
 
 ;; -----------------------------------------------------------------------------
@@ -64,16 +64,31 @@
 ;; Board Size Constants
 (define SIZE 30) ;; this was okay but not sure it is final game size
 
+;; Item Constants
+(define basic_sword (item "Basic Sword" (location 5 5) 15 (circle 15 "solid" "black") 5 #f))
+(define testitem1 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f))
+(define testitem2 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f))
+(define testitem3 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f))
+(define TESTITEMS (list testitem1 testitem2 testitem3))
+
+
+
+  
+
 ;; Adventurer Constants
 (define AVATAR-SIZE 15)
 (define MAX-HEALTH 100)
-(define DEFAULT-GOLD 0)
-(define DEFAULT-ITEMS (list 'basic_sword))
+(define DEFAULT-ITEMS (list basic_sword))
+(define HEALTH_CONSTANT 20) ;;what incriment the health potions will heal.
+(define MAX_HEALTH 100) ;;max health of adventurers
+(define MOVE 15) ;;how much you move when you hit an arrow key
+
+
 
 ;; Monster Constants
 (define LRG-MONSTER-SIZE 25)
 (define MONSTER-SIZE 15)
-(define MAX-MONSTERS 5) ;; max monsters necessary?
+(define MAX-MONSTERS 5) ;; max monsters necessary? NO
 
 ;; GRAPHICAL BOARD
 (define WIDTH-PX  (* AVATAR-SIZE 30))
@@ -85,10 +100,38 @@
 
 ;; Visual constants
 (define EMPTY-SCENE (empty-scene WIDTH-PX HEIGHT-PX))
-(define MONSTER-IMG (bitmap "graphics/monster.gif"))
-(define GOLD-IMG  (bitmap "graphics/gold.gif"))
-(define AVATAR-LEFT-IMG (bitmap "graphics/avatar-left.gif"))
+(define ENDGAME-TEXT-SIZE 15)
+
+(define AVATAR-LEFT-IMG (circle 15 "solid" "green"))
+#|
+(define AVATAR-LEFT-IMG (bitmap "graphics/avatar-left.gif")) (i think we need to force this to the same size)
+|#
 (define AVATAR-RIGHT-IMG (flip-horizontal AVATAR-LEFT-IMG)) ;; this might need to not be flipped but be a separate image all together
+
+
+(define DEFAULT_ADVENTURERS (adventurer "guy" MAX-HEALTH (list empty) "down" (location 200 200) AVATAR-LEFT-IMG))
+
+
+;;;;;;
+
+(define (random-dot)
+  (item "dot" (location (- (random 15 WIDTH-PX) 15) (- (random 15 HEIGHT-PX) 15)) (random 0 15) (circle (random 0 15) "solid" (random-color)) 5 #f));;size and circle size are not the same!
+
+(define (random-color)
+  (make-color (random 0 255) (random 0 255) (random 0 255) (random 0 255)))
+
+(define TESTDOTS (list (random-dot) (random-dot) (random-dot) (random-dot)  (random-dot) (random-dot) (random-dot) (random-dot) (random-dot) (random-dot)))
+
+
+(define STARTING_WORLD (game-world 
+                 DEFAULT_MAP 
+                 DEFAULT_ADVENTURERS
+                 ;;TESTITEMS
+                 TESTDOTS
+                 )
+  )
+
+
 
 ;                                          
 ;                                          
@@ -119,16 +162,11 @@
 ;; Definition: 
 ;; Start the Game
 (define (start-quest)
-  (big-bang (game-world 
-                 (current-map (DEFAULT_MAP)) 
-                 (list (adventurer MAX-HEALTH DEFAULT-ITEMS "down" (list (posn 1 1) AVATAR-LEFT-IMG)))
-                 ;;(list (spawn-monster))
-                 '() ;; no monsters should be empty list
-                 '() ;; items - none for now
+  (big-bang STARTING_WORLD
             (on-tick next-game-world TICK-RATE)
             (on-key direct-avatar)
             (to-draw render-game-world)
-            (stop-when dead? render-end))))
+            (stop-when end? render-end)))
 
 ;; Contract: next-game-world: world --> world
 
@@ -137,35 +175,50 @@
 ;; Example: (start-quest)
 
 ;; Definition: 
-;; Game-world -> Game-world
+;; Game-world -> Game-world (M A I)
+;;takes a game world and checks the health of items and adventurer.
 (define (next-game-world world)
   (define current_map (game-world-current_map world));; the current map being drawn
-  (define adventurers (game-world-adventurers world)) ;; a list of players in the world
-  (define monsters  (game-world-monsters world)) ;; a list of monsters in the current game world
+  (define adventurer (game-world-adventurer world)) ;; a list of players in the world
   (define items (game-world-items world)) ;; a list of the current game world items
-  (define item-to-pickup (can-pickup adventurers items))
-  (if item-to-pickup
-      (game-world adventurer (pickup world_items_list item-to-pickup))
-      (game-world adventurer worlds_item_list)))
+  (game-world current_map (health-check-A adventurer) items) ;;(health-check (list adventurer))
+  )
+
 
 ;; Game-world KeyEvent -> Game-world
 ;; Handle a key event
-(define (direct-avatar world input_key)
-  (cond [(dir? input_key) (world-change-dir world input_key)]
-        [(heal? input_key) (world-heal-adventurer world)]
-        [else world]))
+
 
 ;; Game-world -> Scene
 ;; Render the world as a scene
 (define (render-game-world world)
-  (adventurers+scene (game-world-adventurer world)
-               (items-list+scene (game-world-items world) EMPTY-SCENE)))
+  (define adventurer (game-world-adventurer world)) ;; a list of players in the world
+  (define items (game-world-items world) ) ;; a list of the current game world items
+
+(objects-on-world (flatten (list adventurer items)))
+  )
+
+;;takes a list of objects and palces them onto the world
+(define (objects-on-world list)
+   (cond
+    ((empty? list) DEFAULT_MAP)
+    ((item? (first list)) (place-image (item-image (first list))
+                                       (location-x (item-location (first list)))
+                                       (location-y (item-location (first list)))
+                                       (objects-on-world (rest list))))
+    ((adventurer? (first list)) (place-image (adventurer-image (first list))
+                                             (location-x (adventurer-location (first list)))
+                                             (location-y (adventurer-location (first list)))
+                                              (objects-on-world (rest list))))
+      (else (text "ERROR IN OBJECTS ON WORLD" 24 "red")))
+  )
 
 ;; Game-world -> Boolean
 ;; Is the adventurer dead?
-(define (dead? world)
-  (define adventurers (game-world-adventurer world))
-  (or (zero-health? adventurer) (wall-colliding? adventurer)))
+
+(define (end? world)
+  (if (empty? (game-world-adventurer world)) #t
+      #f))
 
 ;; Game-world -> Scene
 ;; overlays the gameover scene
@@ -214,15 +267,167 @@
 ;; Move in a direction
 ;; > (world-player-move world0 "up")
 ;; (game-world adventurer1 (list items)) 
+;; Key input
+;;takes a world and key, and returns a new world, with the adventurer changed and the items changed
+(define (direct-avatar world input_key)
+  (define player (game-world-adventurer world))
+  (cond
+    [(dir? input_key) (if (legal-move? world input_key) (move-adventurer world input_key) world)]
+    [(heal? input_key) (update-adventurer-health world HEALTH_CONSTANT)]
+    [else world]))
 
-(define (world-player-move world player direction)
-  (define the-adventurer (game-world-adventurer-player world))
-     (game-world (adventurer-change-dir the-adventurer direction) world_gold))
 
-(define (world-heal-adventurer world)
-   (define the-adventurer (game-world-adventurer world))
-     (game-world (heal-adventurer the-adventurer) world_gold))
-)
+
+
+;                                                                          
+;                                                                          
+;                                                                          
+;                                                                          
+;   ;;; ;;;                                 ;;                      ;;     
+;    ;; ;;                                   ;                       ;     
+;    ;; ;;   ;;;;  ;;;  ;;;  ;;;;    ;;; ;   ; ;;    ;;;;    ;;; ;   ; ;;;;
+;    ; ; ;  ;    ;  ;    ;  ;    ;  ;   ;;   ;;  ;  ;    ;  ;   ;;   ;  ;  
+;    ; ; ;  ;    ;   ;  ;   ;;;;;;  ;        ;   ;  ;;;;;;  ;        ;;;   
+;    ;   ;  ;    ;   ;  ;   ;       ;        ;   ;  ;       ;        ; ;   
+;    ;   ;  ;    ;    ;;    ;       ;    ;   ;   ;  ;       ;    ;   ;  ;  
+;   ;;; ;;;  ;;;;     ;;     ;;;;;   ;;;;   ;;; ;;;  ;;;;;   ;;;;   ;;  ;;;
+;                                                                          
+;                                                                          
+;                                                                          
+;                                                                          
+ 
+;;asses if there is a legal move.
+
+(define (legal-move? world input_key)
+  (if (and (in-board? world input_key) (dont-overlap-stagnant-items? world input_key)) #t
+      #f))
+;; asseses if the move is within the bounds of the board.
+
+(define (in-board? world input_key)
+  (define player (game-world-adventurer world))
+  
+ ( cond
+    
+                       ((string=? input_key "up") (if (< (- (location-y (adventurer-location player)) (/ AVATAR-SIZE 2) MOVE) 0) #f
+                                                      #t))
+                       ((string=? input_key "down") (if (> (+ (location-y (adventurer-location player)) (/ AVATAR-SIZE 2) MOVE) HEIGHT-PX) #f
+                                                        #t))
+                       ((string=? input_key "left") (if (< (- (location-x (adventurer-location player)) (/ AVATAR-SIZE 2) MOVE) 0) #f
+                                                      #t))
+                       ((string=? input_key "right") (if (> (+ (location-x (adventurer-location player)) (/ AVATAR-SIZE 2) MOVE) WIDTH-PX) #f
+                                                        #t))
+                       )
+  )
+
+;;takes world and input key, and determines if you are overlapping any items that have the tag, unwalkable
+(define (dont-overlap-stagnant-items? world input_key)
+   (define player (game-world-adventurer world))
+   (dont-overlap? player (non-walkable-items (game-world-items world))))
+
+   ;;return true if nothing overlaps, and false if anything overlaps.
+   
+
+;;take a adventurer and a list of items, determines if any of the non walkable ones overlap
+;;returns t if they dont overlap, and returns false if an item and player overlap
+(define (dont-overlap? explorer list-of-items)
+  (cond
+    [(empty? list-of-items) #t]
+    [(inside-of-player? explorer (first list-of-items)) #f]
+    [else (dont-overlap? explorer (rest list-of-items))]
+    ))
+    
+
+
+
+
+
+(define (inside-of-player? adventurer item)
+  (if (empty? item) item
+      
+  (inside-of-player-helper adventurer (four-corners item))))
+ 
+
+(define (inside-of-player-helper adventurer list-of-corners)
+  (cond
+    ((empty? list-of-corners) #f)
+    (
+     (and
+         (<
+            (- (location-x (adventurer-location adventurer)) (/ AVATAR-SIZE 2))
+            (location-x (first list-of-corners))
+            (+ (location-x (adventurer-location adventurer)) (/ AVATAR-SIZE 2))
+         )
+
+         (<
+            (- (location-y (adventurer-location adventurer)) (/ AVATAR-SIZE 2))
+            (location-y (first list-of-corners))
+            (+ (location-y (adventurer-location adventurer)) (/ AVATAR-SIZE 2))
+         )
+     )
+      #t)
+    (else (inside-of-player-helper adventurer (rest list-of-corners)))))
+   
+
+
+(define (four-corners image)
+  (define Limage (item-location image))
+  (define topleft (location (- (location-x Limage) (/ (item-size image) 2)) (+ (location-y Limage) (/ (item-size image) 2))))
+  (define topright (location (+ (location-x Limage) (/(item-size image) 2)) (+ (location-y Limage) (/ (item-size image) 2))))
+  (define bottomleft (location (- (location-x Limage) (/ (item-size image) 2)) (- (location-y Limage) (/ (item-size image) 2))))
+  (define bottomright (location (+ (location-x Limage) (/ (item-size image) 2)) (- (location-y Limage) (/ (item-size image) 2))))
+  (list topleft topright bottomleft bottomright )
+  )
+
+   
+
+;;takes a list of items and returns a list of the (item-solid #t)
+(define (non-walkable-items itemL)
+(cond
+    [(item? itemL) (if (item-solid itemL) itemL '() )]
+    [(empty? itemL) '()]
+    [(item-solid (first itemL)) (cons (first itemL) (non-walkable-items (rest itemL)))]
+    [else (non-walkable-items (rest itemL))])
+  )
+
+
+;;moves adventurer and returns world... should update item list as well right?
+
+(define (move-adventurer world input_key)
+  (define current_map (game-world-current_map world));; the current map being drawn
+  (define player (game-world-adventurer world)) ;;
+  (define items (game-world-items world))  ;; a list of the current game world items
+  (game-world
+        current_map
+        (adventurer
+             ;;name
+                      (adventurer-name player)
+             ;;health
+                      (adventurer-health player)
+              ;;Items
+                      (flatten (item-helper-a player items)) ;;HERE FIX MEEEE
+             ;; Direction
+                      (cond
+                           ((string=? input_key "up") "up")
+                           ((string=? input_key "down") "down")
+                           ((string=? input_key "left") "left")
+                           ((string=? input_key "right") "right")
+                           (else (adventurer-direction player))
+                         )
+            ;; Location
+                     ( cond
+                       [(and (string=? input_key "up") (legal-move? world input_key))    (location (location-x (adventurer-location player)) (- (location-y (adventurer-location player)) MOVE))]
+                       [(and (string=? input_key "down") (legal-move? world input_key))  (location (location-x (adventurer-location player)) (+ (location-y (adventurer-location player)) MOVE))]
+                       [(and (string=? input_key "left") (legal-move? world input_key)) (location (- (location-x (adventurer-location player)) MOVE) (location-y (adventurer-location player)))]
+                       [(and (string=? input_key "right") (legal-move? world input_key)) (location (+ (location-x (adventurer-location player)) MOVE) (location-y (adventurer-location player)))]
+                     )
+             ;;image
+                     (adventurer-image player)
+                   )
+         (flatten (item-helper-i player items)) ;;ME TOOO FIX ME
+  ))
+
+
+
 
 
 ;                                                                                            
@@ -244,29 +449,70 @@
 ;                                                                                            
 ;
 ;; -----------------------------------------------------------------------------
-;; Posn Posn -> Boolean
-;; Are the two posns are equal?
-;; > (posn=? (posn 1 1) (posn 1 1))
-;; true
-(define (posn=? p1 p2)
-  (and (= (posn-x p1) (posn-x p2))
-       (= (posn-y p1) (posn-y p2))))
 
-(define (legal-move=? avatar direction)
-    (if (= move-adv-loc obs)
 
+
+
+;;return a list of items that is not inside of a player.
+
+ (define (item-helper-i player list-of-items)
+   (cond
+    [(empty? list-of-items) list-of-items]
+    [(inside-of-player? player (first list-of-items)) (item-helper-i player (rest list-of-items))]
+    [else (cons (first list-of-items) (item-helper-i player (rest list-of-items)))]
     )
+   )
+;;update items should take a world and return a list of items
+
+ (define (item-helper-a player list-of-items)
+   (cond
+    [(empty? list-of-items) (adventurer-items player)]
+    [(inside-of-player? player (first list-of-items)) (cons (first list-of-items) (item-helper-a player (rest list-of-items)))]
+    [else (item-helper-a player (rest list-of-items))]
+)
 )
 
-;; Adventurer Direction -> Adventurer 
-(define (adventurer-change-dir avatar direction)
-  (if (= (adventurer-direction avatar) direction (legal-move? avatar))
-         (adventurer (adventurer-direction avatar) (adventurer-gold avatar) (move-adventurer avatar))
-         (adventurer direction (adventurer-gold avatar) (adventurer-location avatar))))
 
-;; Adventurer Heal -> Adventurer
-(define (heal-adventurer adventurer)
-        (if (< (adventurer-health avatar) 49)
-            (adventurer (+ (adventurer-health avatar) 50) (adventurer-direction avatar) (adventurer-gold avatar) (adventurer-location avatar))
-            (adventurer MAX-HEALTH (adventurer-direction avatar) (adventurer-gold avatar) (adventurer-location avatar))))
+;;takes a world and returns the adventurers health added.
+(define (update-adventurer-health world health-incrimenter) 
+  (define current_map (game-world-current_map world));; the current map being drawn
+  (define player (game-world-adventurer world)) ;;
+  (define items (game-world-items world))  ;; a list of the current game world items
+  (game-world current_map (adventurer
+             ;;name
+                      (adventurer-name player)
+             ;;health
+                      (if (< (adventurer-health player) (- MAX-HEALTH health-incrimenter))
+                                   ;;then
+                                   (+ (adventurer-health player) health-incrimenter)
+                                   ;;else
+                                   MAX_HEALTH)
+              ;;Items
+                      (adventurer-items player)
+             ;; Direction
+                       (adventurer-direction player)
+            ;; Location
+                    (adventurer-location player)
+             ;;image
+                     (adventurer-image player)
+                   )
+              items
+  ))
+
+
+;;Health check player
+(define (health-check-A player)
+  (if (<= (adventurer-health player) 0) empty
+      ;;else
+      player))
+
+;;Health Check Items
+(define (health-check-items lst)
+  (cond
+    ((empty? lst) lst )
+    ((and (item? (first lst)) (<= (item-health (first lst)) 0)) (health-check-items (rest lst)))
+    ((item? (first lst)) (cons (first lst)  (health-check-items (rest lst))))
+    )
+  
+)
 
