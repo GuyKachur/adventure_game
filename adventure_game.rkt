@@ -78,6 +78,7 @@
 ;; Adventurer Constants
 (define AVATAR-SIZE 15)
 (define MAX-HEALTH 100)
+(define HEALTH_BAR_HEIGHT 5)
 (define DEFAULT-ITEMS (list basic_sword))
 (define HEALTH_CONSTANT 20) ;;what incriment the health potions will heal.
 (define MAX_HEALTH 100) ;;max health of adventurers
@@ -202,16 +203,33 @@
 (define (objects-on-world list)
    (cond
     ((empty? list) DEFAULT_MAP)
-    ((item? (first list)) (place-image (item-image (first list))
+    ((item? (first list)) 
+                                 (place-image (above
+                                               (render-health-bar (first list))
+                                               (item-image (first list)))
                                        (location-x (item-location (first list)))
                                        (location-y (item-location (first list)))
                                        (objects-on-world (rest list))))
-    ((adventurer? (first list)) (place-image (adventurer-image (first list))
-                                             (location-x (adventurer-location (first list)))
-                                             (location-y (adventurer-location (first list)))
-                                              (objects-on-world (rest list))))
+    ((adventurer? (first list)) 
+                                             (place-image (above
+                                             (render-health-bar (first list))
+                                             (adventurer-image (first list)))
+                                                          (location-x (adventurer-location (first list)))
+                                                          (location-y (adventurer-location (first list)))
+                                                          (objects-on-world (rest list))))
       (else (text "ERROR IN OBJECTS ON WORLD" 24 "red")))
   )
+
+
+;;health bar, take adventurer and give back image of health bar
+(define (render-health-bar object)
+  (cond
+    [(item? object) (if (item-solid object) empty-image
+                        (overlay/align "left" "center" (rectangle (* (/ (item-health object) 100) (item-size object)) HEALTH_BAR_HEIGHT "solid" "red") (rectangle (item-size object) HEALTH_BAR_HEIGHT "solid" "white")))]
+     [(adventurer? object) (overlay/align "left" "center" (rectangle (* (/ (adventurer-health object) 100) AVATAR-SIZE) HEALTH_BAR_HEIGHT "solid" "red") (rectangle AVATAR-SIZE HEALTH_BAR_HEIGHT "solid" "white"))]
+     [else (text "ERROR IN RENDER-HEALTH-BAR" 24 "red")]))
+
+
 
 ;; Game-world -> Boolean
 ;; Is the adventurer dead?
