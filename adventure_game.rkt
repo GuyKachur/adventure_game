@@ -227,8 +227,18 @@
 (define (render-health-bar object)
   (cond
     [(item? object) (if (item-solid object) empty-image
-                        (overlay/align "left" "center" (rectangle (* (/ (item-health object) 100) (item-size object)) HEALTH_BAR_HEIGHT "solid" "red") (rectangle (item-size object) HEALTH_BAR_HEIGHT "solid" "white")))]
-     [(adventurer? object) (overlay/align "left" "center" (rectangle (* (/ (adventurer-health object) 100) AVATAR-SIZE) HEALTH_BAR_HEIGHT "solid" "red") (rectangle AVATAR-SIZE HEALTH_BAR_HEIGHT "solid" "white"))]
+                        (overlay
+                             (overlay/align "left" "center"
+                                            (rectangle (* (/ (item-health object) 100) (item-size object)) HEALTH_BAR_HEIGHT "solid" "red")
+                                            (rectangle (item-size object) HEALTH_BAR_HEIGHT "solid" "white"))
+                             (rectangle (+ (item-size object) 3) (+ HEALTH_BAR_HEIGHT 3) "solid" "black"))
+                             )]
+     [(adventurer? object) (overlay
+                                (overlay/align "left" "center"
+                                               (rectangle (* (/ (adventurer-health object) 100) AVATAR-SIZE) HEALTH_BAR_HEIGHT "solid" "red")
+                                               (rectangle AVATAR-SIZE HEALTH_BAR_HEIGHT "solid" "white"))
+                                  (rectangle (+ AVATAR-SIZE 3) (+ HEALTH_BAR_HEIGHT 3) "solid" "black"))
+                                ]
      [else (text "ERROR IN RENDER-HEALTH-BAR" 24 "red")]))
 
 
