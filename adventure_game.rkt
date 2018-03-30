@@ -104,6 +104,7 @@
 (define ENDGAME-TEXT-SIZE 15)
 
 (define AVATAR-LEFT-IMG (circle 15 "solid" "green"))
+
 #|
 (define AVATAR-LEFT-IMG (bitmap "graphics/avatar-left.gif")) (i think we need to force this to the same size)
 |#
@@ -132,7 +133,8 @@
                  )
   )
 
-
+(println "Please Enter a Color you want your avatar to be MUST BE IN RGB FORMAT (color 0-255 0-255 0-255 0-255) you may also do (random-color)")
+(define new-color (random-color)) ;;will be read or something, maybe a gui? but for now 
 
 ;                                          
 ;                                          
@@ -534,3 +536,29 @@
   
 )
 
+;;Color Change for avatar not implemented but i thought i would copy it over so you can play with it if you want
+;;take image and return new image with different color
+
+(define (color-change image)
+  (define xlist (image->color-list image))
+  (define new-color-list (map colorchange-helper xlist))
+  (color-list->bitmap new-color-list (image-width image) (image-height image)))
+
+(define (colorchange-helper listitem)
+  (colorchange listitem (color 255 0 0 255) 150));; this is a range number seems to be good for getting rid of all the red
+
+
+(define (colorchange item chosen_color range)
+  (if (and
+       (< (- (color-red chosen_color) range) (color-red item) (+ (color-red chosen_color) range))
+       (< (- (color-green chosen_color) range) (color-green item) (+ (color-green chosen_color) range))
+       (< (- (color-blue chosen_color) range) (color-blue item) (+ (color-blue chosen_color) range))
+       (< (- (color-alpha chosen_color) range) (color-alpha item) (+ (color-alpha chosen_color) range)))
+      new-color
+      ;;else
+      item)
+  )
+
+;;you can try it with this (color-change (circle 50 "solid" "red"))
+;;or your avatar image, Basically it find all RED (color 255 0 0 255) and replaces it with whatever new-color is. which currnently is a random color. i was having trouble with (read) and how it assigns things,
+;;didnt want to have to do four seperate calls for an umber, but we might have to.
