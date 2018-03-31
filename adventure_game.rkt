@@ -103,11 +103,10 @@
 (define EMPTY-SCENE (empty-scene WIDTH-PX HEIGHT-PX))
 (define ENDGAME-TEXT-SIZE 15)
 
-(define AVATAR-LEFT-IMG (circle 15 "solid" "green"))
+;;(define AVATAR-LEFT-IMG (circle 15 "solid" "green"))
 
-#|
-(define AVATAR-LEFT-IMG (bitmap "graphics/avatar-left.gif")) (i think we need to force this to the same size)
-|#
+
+(define AVATAR-LEFT-IMG (bitmap "graphics/avatar-left.gif")) ;;i think we need to force this to the same size
 (define AVATAR-RIGHT-IMG (flip-horizontal AVATAR-LEFT-IMG)) ;; this might need to not be flipped but be a separate image all together
 
 
@@ -197,9 +196,7 @@
 (define (render-game-world world)
   (define adventurer (game-world-adventurer world)) ;; a list of players in the world
   (define items (game-world-items world) ) ;; a list of the current game world items
-
-(objects-on-world (flatten (list adventurer items)))
-  )
+  (objects-on-world (flatten (list adventurer items))))
 
 ;;takes a list of objects and palces them onto the world
 (define (objects-on-world list)
@@ -451,7 +448,10 @@
                        [(and (string=? input_key "right") (legal-move? world input_key)) (location (+ (location-x (adventurer-location player)) MOVE) (location-y (adventurer-location player)))]
                      )
              ;;image
-                     (adventurer-image player)
+                     (cond
+                       [(string=? input_key "left")AVATAR-LEFT-IMG]
+                       [(string=? input_key "right")AVATAR-RIGHT-IMG]
+                       [else (adventurer-image player)])
                    )
          (flatten (item-helper-i player items)) ;;ME TOOO FIX ME
   ))
@@ -572,3 +572,5 @@
 ;;you can try it with this (color-change (circle 50 "solid" "red"))
 ;;or your avatar image, Basically it find all RED (color 255 0 0 255) and replaces it with whatever new-color is. which currnently is a random color. i was having trouble with (read) and how it assigns things,
 ;;didnt want to have to do four seperate calls for an umber, but we might have to.
+
+(start-quest)
