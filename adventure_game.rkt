@@ -40,7 +40,7 @@
 ;; Data Definitions
 ;; -----------------------------------------------------------------------------
 
-;; Game World is a (game-world current_map (Listof adventurers) (Listof Monsters)(Listof Items)(Numberof Gold))
+;; Game World is a (game-world current_map (Listof adventurers)(Listof Items))
 (struct game-world (current_map adventurer items) #:transparent #:mutable)
 
 ;; Adventurer is a (make-adventurer Health (cons Items [Listof Items]) Gold Direction Location)
@@ -110,13 +110,13 @@
 (define AVATAR-RIGHT-IMG (flip-horizontal AVATAR-LEFT-IMG)) ;; this might need to not be flipped but be a separate image all together
 
 
-(define DEFAULT_ADVENTURERS (adventurer "guy" MAX-HEALTH (list empty) "down" (location 200 200) AVATAR-LEFT-IMG))
+(define DEFAULT_ADVENTURERS (adventurer "guy" MAX-HEALTH (list (item "bullet" (location 50 50) 5 (circle (random 0 15) "solid" "red") -75 #f) empty) "down" (location 200 200) AVATAR-LEFT-IMG))
 
 
 ;;;;;;
 
 (define (random-dot)
-  (item "dot" (location (- (random 15 WIDTH-PX) 15) (- (random 15 HEIGHT-PX) 15)) (random 0 15) (circle (random 0 15) "solid" (random-color)) 5 #f));;size and circle size are not the same!
+  (item "dot" (location (- (random 15 WIDTH-PX) 15) (- (random 15 HEIGHT-PX) 15)) (random 0 15) (circle (random 0 15) "solid" (random-color)) (random 10) #f));;size and circle size are not the same!
 
 (define (random-color)
   (make-color (random 0 255) (random 0 255) (random 0 255) (random 0 255)))
@@ -220,10 +220,10 @@
   )
 
 
-;;health bar, take adventurer and give back image of health bar
+;;health bar, take adventurer and give back image of health bar DOESNT ACCOUNT FOR NEGATIVE NUMERS? (should we dsiplay the health bar if the health is negative? should we give it a different color?
 (define (render-health-bar object)
   (cond
-    [(item? object) (if (item-solid object) empty-image
+    [(item? object) (if (item-solid object) empty-image ;;puts an empty image if the item is solid (should we add (or (< (item-health object) 0) ?
                         (overlay
                              (overlay/align "left" "center"
                                             (rectangle (* (/ (item-health object) 100) (item-size object)) HEALTH_BAR_HEIGHT "solid" "red")
@@ -300,7 +300,6 @@
   (define player (game-world-adventurer world))
   (cond
     [(dir? input_key) (if (legal-move? world input_key) (move-adventurer world input_key) world)]
-    [(heal? input_key) (update-adventurer-health world HEALTH_CONSTANT)]
     [else world]))
 
 
@@ -423,15 +422,19 @@
   (define current_map (game-world-current_map world));; the current map being drawn
   (define player (game-world-adventurer world)) ;;
   (define items (game-world-items world))  ;; a list of the current game world items
+  (define A-items (flatten (item-helper-a player items))) ;;FIX ME
+  (define A-health (sum-health MAX-HEALTH A-items)) 
   (game-world
         current_map
         (adventurer
              ;;name
                       (adventurer-name player)
              ;;health
-                      (adventurer-health player)
+                    (if (> A-health MAX-HEALTH) MAX-HEALTH
+                        ;;else
+                        A-health)
               ;;Items
-                      (flatten (item-helper-a player items)) ;;HERE FIX MEEEE
+                      A-items
              ;; Direction
                       (cond
                            ((string=? input_key "up") "up")
@@ -456,8 +459,11 @@
          (flatten (item-helper-i player items)) ;;ME TOOO FIX ME
   ))
 
-
-
+;;takes and adventurer and a list of items, and returns the adventurer health
+(define (sum-health health list-of-items)
+  (if (empty? list-of-items) health
+      ;;else
+       (+ (item-health (first list-of-items)) (sum-health health (rest list-of-items)))))
 
 
 ;                                                                                            
@@ -503,6 +509,7 @@
 )
 
 
+;;WE DONT USE THIS EITHER I THINK
 ;;takes a world and returns the adventurers health added.
 (define (update-adventurer-health world health-incrimenter) 
   (define current_map (game-world-current_map world));; the current map being drawn
@@ -536,6 +543,8 @@
       ;;else
       player))
 
+
+;;I DONT THINK WE USE THIS ANYWHERE ANYMORE
 ;;Health Check Items
 (define (health-check-items lst)
   (cond
