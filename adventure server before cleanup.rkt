@@ -1,23 +1,7 @@
 #lang racket
 
-#|
-   The Adventure Game 
-   ------------------
+(provide start-server)
 
-   In the Adventure Game you will control the avatar Guy.  He is a muscular warrior with special powers and can
-   pickup and use new weapons he finds on his quests.
-
-   Items like gold will be scattered around he map for you to collect but beware of nasty creatures trying to 
-   lure you into a trap!
-
-   You will move with arrow keys and fights will 
-
-   How to Play
-   -----------
- 
-   Run ;; and maybe evaluate 
-     (start-quest)
-|#
 ;                                                                                                                                
 ;                                                                                                                                
 ;                                                                                                                                
@@ -26,7 +10,7 @@
 ;     ;    ;                    ;   ;      ;                        ;                                 ;                          
 ;     ;    ;;;;    ;;;          ;   ;   ;;;;  ;   ;   ;;;   ;;;;   ;;;    ;   ;  ; ;;    ;;;          ;       ;;;;  ;;;;;   ;;;  
 ;     ;    ;   ;  ;   ;         ;;;;;  ;   ;  ;   ;  ;   ;  ;   ;   ;     ;   ;  ;;  ;  ;   ;         ;  ;;  ;   ;  ; ; ;  ;   ; 
-;     ;    ;   ;  ;;;;;         ;   ;  ;   ;   ; ;   ;;;;;  ;   ;   ;     ;   ;  ;   ;  ;;;;;         ;   ;  ;   ;  ; ; ;  ;;;;; 
+;     ;    ;   ;  ;;;;;         ;   ;  ;   ;   ; ;   ;;;;;  ;   ;   ;     ;   ;  ;   ;  ;;;;;         ;   ;  ;   ;  ; ; ;  ;;;;; SERVER
 ;     ;    ;   ;  ;             ;   ;  ;   ;   ; ;   ;      ;   ;   ;     ;   ;  ;      ;             ;   ;  ;   ;  ; ; ;  ;     
 ;     ;    ;   ;  ;   ;         ;   ;  ;   ;    ;    ;   ;  ;   ;   ;     ;  ;;  ;      ;   ;         ;   ;  ;  ;;  ; ; ;  ;   ; 
 ;     ;    ;   ;   ;;;          ;   ;   ;;;;    ;     ;;;   ;   ;    ;;    ;; ;  ;       ;;;           ;;;    ;; ;  ; ; ;   ;;;  
@@ -35,6 +19,42 @@
 ; 
 
 (require 2htdp/image 2htdp/universe)
+ ;; (PROVIDE A TON OF STUFF)
+
+
+
+;                                                                          
+;                                                                          
+;                                                                          
+;                                                                          
+;     ;;;;                                                                 
+;    ;   ;                           ;                       ;             
+;   ;        ;;;;   ;; ;;    ;;;;;  ;;;;;    ;;;;   ;; ;;   ;;;;;    ;;;;; 
+;   ;       ;    ;   ;;  ;  ;    ;   ;      ;    ;   ;;  ;   ;      ;    ; 
+;   ;       ;    ;   ;   ;   ;;;;    ;       ;;;;;   ;   ;   ;       ;;;;  
+;   ;       ;    ;   ;   ;       ;   ;      ;    ;   ;   ;   ;           ; 
+;    ;   ;  ;    ;   ;   ;  ;    ;   ;   ;  ;   ;;   ;   ;   ;   ;  ;    ; 
+;     ;;;    ;;;;   ;;; ;;; ;;;;;     ;;;    ;;; ;; ;;; ;;;   ;;;   ;;;;;  
+;                                                                          
+;                                                                          
+;                                                                          
+;
+
+
+
+;; Init Constants
+(define TICK 1/10)
+(define MAX_PLAYERS 2)
+(define START-TIME 0)
+(define WAIT-TIME 100)
+
+
+(define STARTING_ITEMS empty) ;;whatever items we want to be in the world to start
+
+
+
+
+
 
 ;; -----------------------------------------------------------------------------
 ;; Data Definitions
@@ -51,7 +71,7 @@
 ;;(struct adventurer (health items direction location) #:transparent)
 (struct adventurer (name health items direction location image) #:transparent #:mutable)
 (struct location (x y) #:transparent #:mutable)
-(struct item (name location size image health solid)#:transparent #:mutable) ;; im thinking health we can control for decay.
+(struct item (name location size image health solid direction decay)#:transparent #:mutable)
 
 
 ;; -----------------------------------------------------------------------------
@@ -79,7 +99,6 @@
 (define AVATAR-SIZE 15)
 (define MAX-HEALTH 100)
 (define HEALTH_BAR_HEIGHT 5)
-(define DEFAULT-ITEMS (list basic_sword))
 (define HEALTH_CONSTANT 20) ;;what incriment the health potions will heal.
 (define MAX_HEALTH 100) ;;max health of adventurers
 (define MOVE 15) ;;how much you move when you hit an arrow key
@@ -135,138 +154,250 @@
 (println "Please Enter a Color you want your avatar to be MUST BE IN RGB FORMAT (color 0-255 0-255 0-255 0-255) you may also do (random-color)")
 (define new-color (random-color)) ;;will be read or something, maybe a gui? but for now 
 
-;                                          
-;                                          
-;                                          
-;                          ;               
-;                          ;               
-;  ;;;   ;;;                               
-;   ;;   ;;                                
-;   ; ; ; ;     ;;;;     ;;;      ;; ;;;   
-;   ; ; ; ;    ;    ;      ;       ;;   ;  
-;   ; ; ; ;         ;      ;       ;    ;  
-;   ;  ;  ;    ;;;;;;      ;       ;    ;  
-;   ;     ;   ;     ;      ;       ;    ;  
-;   ;     ;   ;    ;;      ;       ;    ;  
-;  ;;;   ;;;   ;;;; ;;  ;;;;;;;   ;;;  ;;; 
-;                                          
-;                                          
-;                                          
-;                                          
-;; -----------------------------------------------------------------------------
 
-;; Contract: start-quest: none -> none
+;; Data Definitions 
+(struct serverworld (map players items spectators) #:transparent #:mutable)
+(struct waitingworld (listofplayers))
 
-;; Purpose: starts the game in bigbang and is the main game loop
+;; plus some update primitives:
 
-;; Example: (start-quest)
 
-;; Definition: 
-;; Start the Game
-(define (start-quest n ip)
-  (big-bang STARTING_WORLD
-            ;;(on-tick next-game-world TICK-RATE)
-            (on-key direct-avatar)
-            (to-draw render-game-world)
-            (stop-when end? render-end)
-            (name n)
-            (register ip)
-            (on-receive handle-message)
-    
+;; adds player
+(define (join-adventurer waitingworld new-player)
+  (cons new-player (waitingworld-listofplayers waitingworld)))
+
+
+;;adds spectator
+(define (join-spectator world new-spectator)
+  (serverworld (serverworld-map world) (serverworld-players world) (serverworld-items world) (cons new-spectator (serverworld-spectators world))))
+
+;;remove player
+(define (remove-player waitingworld player)
+  (remove player (waitingworld-listofplayers waitingworld)))
+
+;;remove spectator
+(define (remove-spectator world spectator)
+  (serverworld (serverworld-map world) (serverworld-players world) (serverworld-items world) (remove spectator (serverworld-spectators world))))
+
+(define DEFAULT_ITEMS empty)
+(define initial-server (serverworld DEFAULT_MAP empty DEFAULT_ITEMS empty))
+
+
+;                                  
+;                                  
+;                                  
+;                                  
+;   ;;; ;;;            ;           
+;    ;; ;;                         
+;    ;; ;;   ;;;;    ;;;    ;; ;;  
+;    ; ; ;  ;    ;     ;     ;;  ; 
+;    ; ; ;   ;;;;;     ;     ;   ; 
+;    ;   ;  ;    ;     ;     ;   ; 
+;    ;   ;  ;   ;;     ;     ;   ; 
+;   ;;; ;;;  ;;; ;;  ;;;;;  ;;; ;;;
+;                                  
+;                                  
+;                                  
+;                                  
+
+(define (start-server) 
+  (universe initial-server 
+            (on-new handle-server-connect)
+            (on-msg handle-server-msg)
+            (on-tick tick-tock TICK)
+            (on-disconnect handle-server-disconnect)))
+
+
+
+;; handle-server-disconnect
+
+(define (handle-server-disconnect s)
+  (if (empty? (serverworld-players s)) initial-server
+      s
+      )
+  )
+
+;;; Game-world -> Boolean
+;;; Is the adventurer dead?
+;
+;(define (end? s)
+;  (if (empty? (serverworld-players s)) #t
+;      #f))
+;
+;;; Game-world -> Scene
+;;; overlays the gameover scene
+;(define (render-end w)
+;  (overlay (text "Game over" ENDGAME-TEXT-SIZE "black")
+;           (render-game-world w)))
+
+;;takes an incoming world and adds it to the server lists, either player or spectator
+(define (handle-server-connect s iw)
+   (cond [(waitingworld? s) (join-adventurer s iw)]
+         [(serverworld? s)   (join-spectator s iw) ]
+         )
+  )
+
+
+
+
+;;need two functions. one to remove an adventurer from a list, and return it
+(define (remove-adventurer name listofplayers)
+  (cond
+    [(empty? listofplayers) '()]
+    [(= name (adventurer-name (first listofplayers))) (remove-adventurer name (rest listofplayers)) ]
+    [(cons (first listofplayers) (remove-adventurer name (rest listofplayers)))]
     )
   )
 
 
-;;take a message from the server, An S expression (in this case a list of items to be rendered)
-
-(define (handle-message serverworld)
-  (render-game-world serverworld) )
-
-
-
-
-;; Contract: next-game-world: world --> world
-
-;; Purpose: starts the game in bigbang and is the main game loop
-
-;; Example: (start-quest)
-
-;; Definition: 
-;; Game-world -> Game-world (M A I)
-;;takes a game world and checks the health of items and adventurer.
-(define (next-game-world world)
-  (define current_map (game-world-current_map world));; the current map being drawn
-  (define adventurer (game-world-adventurer world)) ;; a list of players in the world
-  (define items (game-world-items world)) ;; a list of the current game world items
-  (game-world current_map (health-check-A adventurer) items) ;;(health-check (list adventurer))
-  )
-
-
-;; Game-world KeyEvent -> Game-world
-;; Handle a key event
-
-
-;; Game-world -> Scene
-;; Render the world as a scene
-(define (render-game-world world)
-  (define adventurer (game-world-adventurer world)) ;; a list of players in the world
-  (define items (game-world-items world) ) ;; a list of the current game world items
-  (objects-on-world (flatten (list adventurer items))))
-
-;;takes a list of objects and palces them onto the world
-(define (objects-on-world list)
+;;select adventurer
+(define (select-adventurer name listofplayers)
    (cond
-    ((empty? list) DEFAULT_MAP)
-    ((item? (first list)) 
-                                 (place-image (above
-                                               (render-health-bar (first list))
-                                               (item-image (first list)))
-                                       (location-x (item-location (first list)))
-                                       (location-y (item-location (first list)))
-                                       (objects-on-world (rest list))))
-    ((adventurer? (first list)) 
-                                             (place-image (above
-                                             (render-health-bar (first list))
-                                             (adventurer-image (first list)))
-                                                          (location-x (adventurer-location (first list)))
-                                                          (location-y (adventurer-location (first list)))
-                                                          (objects-on-world (rest list))))
-      (else (text "ERROR IN OBJECTS ON WORLD" 24 "red")))
+    [(empty? listofplayers) '()]
+    [(= name (adventurer-name (first listofplayers))) (first listofplayers)]
+    [(select-adventurer name (rest listofplayers))]
+    )
+  )
+
+;; (map players items spectators)
+
+
+;;convert to new
+;;takes (world map adventurer items) -> (serverworld (map players items spectators))
+
+
+(define (handle-server-msg s client msg)
+  (define otherplayers (remove-adventurer (first msg) (serverworld-players s)))
+  (define player (select-adventurer (first msg) (serverworld-players s)))
+  
+  (define WORLD (game-world (serverworld-map s) player (serverworld-items s))) 
+  (define OLDWORLD (move-adventurer WORLD (rest (first msg)))) ;;second part is the inputkey
+
+(serverworld (serverworld-map s) (cons (game-world-adventurer OLDWORLD) otherplayers) (game-world-items OLDWORLD) (serverworld-spectators s))
   )
 
 
-;;health bar, take adventurer and give back image of health bar DOESNT ACCOUNT FOR NEGATIVE NUMERS? (should we dsiplay the health bar if the health is negative? should we give it a different color?
-(define (render-health-bar object)
+
+
+
+;;moves adventurer and returns world... should update item list as well right?
+  ;;convert to old world,
+;;  call relavent functions,
+;;  the convert back to server world
+
+
+  
+(define (move-adventurer world input_key)
+  (define current_map (game-world-current_map world));; the current map being drawn
+  (define player (game-world-adventurer world)) ;;
+  (define items (game-world-items world))  ;; a list of the current game world items
+  (define A-items (flatten (item-helper-a player items))) ;;FIX ME
+  (define A-health (sum-health MAX-HEALTH A-items)) 
+  (game-world
+        current_map
+        (adventurer
+             ;;name
+                      (adventurer-name player)
+             ;;health
+                    (if (> A-health MAX-HEALTH) MAX-HEALTH
+                        ;;else
+                        A-health)
+              ;;Items
+                      A-items
+             ;; Direction
+                      (cond
+                           ((string=? input_key "up") "up")
+                           ((string=? input_key "down") "down")
+                           ((string=? input_key "left") "left")
+                           ((string=? input_key "right") "right")
+                           (else (adventurer-direction player))
+                         )
+            ;; Location
+                     ( cond
+                       [(and (string=? input_key "up") (legal-move? world input_key))    (location (location-x (adventurer-location player)) (- (location-y (adventurer-location player)) MOVE))]
+                       [(and (string=? input_key "down") (legal-move? world input_key))  (location (location-x (adventurer-location player)) (+ (location-y (adventurer-location player)) MOVE))]
+                       [(and (string=? input_key "left") (legal-move? world input_key)) (location (- (location-x (adventurer-location player)) MOVE) (location-y (adventurer-location player)))]
+                       [(and (string=? input_key "right") (legal-move? world input_key)) (location (+ (location-x (adventurer-location player)) MOVE) (location-y (adventurer-location player)))]
+                     )
+             ;;image
+                     (cond
+                       [(string=? input_key "left")AVATAR-LEFT-IMG]
+                       [(string=? input_key "right")AVATAR-RIGHT-IMG]
+                       [else (adventurer-image player)])
+                   )
+         (flatten (item-helper-i player items)) ;;ME TOOO FIX ME
+  ))
+
+
+
+  
+
+
+
+
+;(struct serverworld (map players items spectators) #:transparent #:mutable)
+;(struct serverwaiting (listofplayers))
+
+(define (tick-tock s)
   (cond
-    [(item? object) (if (item-solid object) empty-image ;;puts an empty image if the item is solid (should we add (or (< (item-health object) 0) ?
-                        (overlay
-                             (overlay/align "left" "center"
-                                            (rectangle (* (/ (item-health object) 100) (item-size object)) HEALTH_BAR_HEIGHT "solid" "red")
-                                            (rectangle (item-size object) HEALTH_BAR_HEIGHT "solid" "white"))
-                             (rectangle (+ (item-size object) 3) (+ HEALTH_BAR_HEIGHT 3) "solid" "black"))
-                             )]
-     [(adventurer? object) (overlay
-                                (overlay/align "left" "center"
-                                               (rectangle (* (/ (adventurer-health object) 100) AVATAR-SIZE) HEALTH_BAR_HEIGHT "solid" "red")
-                                               (rectangle AVATAR-SIZE HEALTH_BAR_HEIGHT "solid" "white"))
-                                  (rectangle (+ AVATAR-SIZE 3) (+ HEALTH_BAR_HEIGHT 3) "solid" "black"))
-                                ]
-     [else (text "ERROR IN RENDER-HEALTH-BAR" 24 "red")]))
+    [(waitingworld? s)
+            (if (= (length s) MAX_PLAYERS);;than
+                (swap-world-states s)
+                ;;else
+                s)
+            ]
+    [(serverworld? s) (tick-world s)]
+    )
+  )
+
+;;this is essentially the intial world, so whatever items or things we want to appear in the beginning go here
+(define (swap-world-states s)
+  (serverworld DEFAULT_MAP (players-to-adventurers (waitingworld-listofplayers s)) STARTING_ITEMS empty))
 
 
 
-;; Game-world -> Boolean
-;; Is the adventurer dead?
+(define (players-to-adventurers playerlist)
+                                (cond
+                                  [(empty? playerlist) '() ]
+                                  [(cons (adventurer (first (first playerlist)) MAX_HEALTH empty "left" (STARTING_LOCATION) (RANDOM_ADVENTURER_IMAGE)) (players-to-adventurers (rest playerlist)))]))
 
-(define (end? world)
-  (if (empty? (game-world-adventurer world)) #t
-      #f))
 
-;; Game-world -> Scene
-;; overlays the gameover scene
-(define (render-end w)
-  (overlay (text "Game over" ENDGAME-TEXT-SIZE "black")
-           (render-game-world w)))
+
+
+          
+          ;;ticks the world, basically just calls update item health on a list of items
+
+(define (tick-world s)
+  (define map (serverworld-map s))
+  (define players (serverworld-players s))
+  (define items (serverworld-items s))
+  (define spectators (serverworld-spectators s))
+  (serverworld map players (update-item-health s) spectators))
+
+
+
+
+
+
+               ;;need a function that takes a list of items and removes health 0 ones
+;;passes back a list of items tho
+(define (update-item-health s)
+  (define LIST (serverworld-items s))
+  (item-list-helper LIST))
+
+(define (item-list-helper LIST)
+    (cond
+    [(empty? LIST) '()]
+    [(< (item-health (first LIST)) 0) (item-list-helper (rest LIST))] 
+    [(cons (decay-health (first LIST)) (item-list-helper (rest LIST)))]
+    )
+  )
+;;returns an item thats health has been modified by the decay rate.
+(define (decay-health ITEM)
+  (item (item-name ITEM) (item-location ITEM) (item-size ITEM) (item-image ITEM) (* (item-health ITEM) (item-decay ITEM)) (item-solid ITEM) (item-direction ITEM) (item-decay ITEM)))
+
+
+
 
 
 ;                                                                                                      
@@ -431,48 +562,7 @@
   )
 
 
-;;moves adventurer and returns world... should update item list as well right?
 
-(define (move-adventurer world input_key)
-  (define current_map (game-world-current_map world));; the current map being drawn
-  (define player (game-world-adventurer world)) ;;
-  (define items (game-world-items world))  ;; a list of the current game world items
-  (define A-items (flatten (item-helper-a player items))) ;;FIX ME
-  (define A-health (sum-health MAX-HEALTH A-items)) 
-  (game-world
-        current_map
-        (adventurer
-             ;;name
-                      (adventurer-name player)
-             ;;health
-                    (if (> A-health MAX-HEALTH) MAX-HEALTH
-                        ;;else
-                        A-health)
-              ;;Items
-                      A-items
-             ;; Direction
-                      (cond
-                           ((string=? input_key "up") "up")
-                           ((string=? input_key "down") "down")
-                           ((string=? input_key "left") "left")
-                           ((string=? input_key "right") "right")
-                           (else (adventurer-direction player))
-                         )
-            ;; Location
-                     ( cond
-                       [(and (string=? input_key "up") (legal-move? world input_key))    (location (location-x (adventurer-location player)) (- (location-y (adventurer-location player)) MOVE))]
-                       [(and (string=? input_key "down") (legal-move? world input_key))  (location (location-x (adventurer-location player)) (+ (location-y (adventurer-location player)) MOVE))]
-                       [(and (string=? input_key "left") (legal-move? world input_key)) (location (- (location-x (adventurer-location player)) MOVE) (location-y (adventurer-location player)))]
-                       [(and (string=? input_key "right") (legal-move? world input_key)) (location (+ (location-x (adventurer-location player)) MOVE) (location-y (adventurer-location player)))]
-                     )
-             ;;image
-                     (cond
-                       [(string=? input_key "left")AVATAR-LEFT-IMG]
-                       [(string=? input_key "right")AVATAR-RIGHT-IMG]
-                       [else (adventurer-image player)])
-                   )
-         (flatten (item-helper-i player items)) ;;ME TOOO FIX ME
-  ))
 
 ;;takes and adventurer and a list of items, and returns the adventurer health
 (define (sum-health health list-of-items)
@@ -501,7 +591,9 @@
 ;
 ;; -----------------------------------------------------------------------------
 
+(define (STARTING_LOCATION) (location (random 5 (- WIDTH-PX 5) (random 5 (- HEIGHT-PX 5)))))
 
+(define (RANDOM_ADVENTURER_IMAGE) (color-change AVATAR-LEFT-IMG))
 
 
 ;;return a list of items that is not inside of a player.
@@ -579,10 +671,10 @@
   (color-list->bitmap new-color-list (image-width image) (image-height image)))
 
 (define (colorchange-helper listitem)
-  (colorchange listitem (color 255 0 0 255) 150));; this is a range number seems to be good for getting rid of all the red
+  (colorchange listitem (color 255 0 0 255) 150 (random-color)));; this is a range number seems to be good for getting rid of all the red
 
 
-(define (colorchange item chosen_color range)
+(define (colorchange item chosen_color range new-color)
   (if (and
        (< (- (color-red chosen_color) range) (color-red item) (+ (color-red chosen_color) range))
        (< (- (color-green chosen_color) range) (color-green item) (+ (color-green chosen_color) range))
@@ -597,4 +689,3 @@
 ;;or your avatar image, Basically it find all RED (color 255 0 0 255) and replaces it with whatever new-color is. which currnently is a random color. i was having trouble with (read) and how it assigns things,
 ;;didnt want to have to do four seperate calls for an umber, but we might have to.
 
-(start-quest)
