@@ -22,6 +22,7 @@
  ;; (PROVIDE A TON OF STUFF)
 
 
+(require racket/trace)
 
 ;                                                                          
 ;                                                                          
@@ -85,10 +86,10 @@
 (define SIZE 30) ;; this was okay but not sure it is final game size
 
 ;; Item Constants
-(define basic_sword (item "Basic Sword" (location 5 5) 15 (circle 15 "solid" "black") 5 #f))
-(define testitem1 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f))
-(define testitem2 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f))
-(define testitem3 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f))
+(define basic_sword (item "Basic Sword" (location 5 5) 15 (circle 15 "solid" "black") 5 #f "south" 1/5))
+(define testitem1 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f "south" 1/5))
+(define testitem2 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f "south" 1/5))
+(define testitem3 (item "hey" (location 100 100) 15 (circle 15 "solid" "black") 5 #f "south" 1/5))
 (define TESTITEMS (list testitem1 testitem2 testitem3))
 
 
@@ -129,13 +130,13 @@
 (define AVATAR-RIGHT-IMG (flip-horizontal AVATAR-LEFT-IMG)) ;; this might need to not be flipped but be a separate image all together
 
 
-(define DEFAULT_ADVENTURERS (adventurer "guy" MAX-HEALTH (list (item "bullet" (location 50 50) 5 (circle (random 0 15) "solid" "red") -75 #f) empty) "down" (location 200 200) AVATAR-LEFT-IMG))
+(define DEFAULT_ADVENTURERS (adventurer "guy" MAX-HEALTH (list (item "bullet" (location 50 50) 5 (circle (random 0 15) "solid" "red") -75 #f "south" 1/5) empty) "down" (location 200 200) AVATAR-LEFT-IMG))
 
 
 ;;;;;;
 
 (define (random-dot)
-  (item "dot" (location (- (random 15 WIDTH-PX) 15) (- (random 15 HEIGHT-PX) 15)) (random 0 15) (circle (random 0 15) "solid" (random-color)) (random 10) #f));;size and circle size are not the same!
+  (item "dot" (location (- (random 15 WIDTH-PX) 15) (- (random 15 HEIGHT-PX) 15)) (random 0 15) (circle (random 0 15) "solid" (random-color)) (random 10) #f "south" 1/5));;size and circle size are not the same!
 
 (define (random-color)
   (make-color (random 0 255) (random 0 255) (random 0 255) (random 0 255)))
@@ -151,25 +152,28 @@
                  )
   )
 
-(println "Please Enter a Color you want your avatar to be MUST BE IN RGB FORMAT (color 0-255 0-255 0-255 0-255) you may also do (random-color)")
+;;(println "Please Enter a Color you want your avatar to be MUST BE IN RGB FORMAT (color 0-255 0-255 0-255 0-255) you may also do (random-color)")
 (define new-color (random-color)) ;;will be read or something, maybe a gui? but for now 
 
 
 ;; Data Definitions 
-(struct serverworld (map players items spectators) #:transparent #:mutable)
-(struct waitingworld (listofplayers))
+(struct serverworld (map players items spectators) #:transparent)
+(struct waitingworld (listofplayers) #:transparent)
 
 ;; plus some update primitives:
 
 
 ;; adds player
-(define (join-adventurer waitingworld new-player)
-  (cons new-player (waitingworld-listofplayers waitingworld)))
+;;returns server world?
+(define (join-adventurer s iw)
+ ;; (waitingworld (flatten (list (iworld-name iw) (waitingworld-listofplayers waitingworld)))))
+  (waitingworld (flatten (list iw (waitingworld-listofplayers s)))))
+
 
 
 ;;adds spectator
 (define (join-spectator world new-spectator)
-  (serverworld (serverworld-map world) (serverworld-players world) (serverworld-items world) (cons new-spectator (serverworld-spectators world))))
+    (serverworld (serverworld-map world) (serverworld-players world) (serverworld-items world) (cons new-spectator (serverworld-spectators world))))
 
 ;;remove player
 (define (remove-player waitingworld player)
@@ -181,7 +185,7 @@
 
 (define DEFAULT_ITEMS empty)
 (define initial-server (serverworld DEFAULT_MAP empty DEFAULT_ITEMS empty))
-
+(define initial-waiting-world (waitingworld empty))
 
 ;                                  
 ;                                  
@@ -201,17 +205,107 @@
 ;                                  
 
 (define (start-server) 
-  (universe initial-server 
+  (universe initial-waiting-world 
             (on-new handle-server-connect)
             (on-msg handle-server-msg)
             (on-tick tick-tock TICK)
+            (state #t) ;;change to false to not see the server state window, useful for debugging
             (on-disconnect handle-server-disconnect)))
+
+
+
+;                                                                          
+;                                                                          
+;                                                                          
+;                                                                          
+;    ;;; ;                     ;              ;;       ;                   
+;   ;   ;;                                     ;                           
+;   ;        ;;;;   ;; ;;;   ;;;     ;;;;      ;     ;;;     ;;;;;   ;;;;  
+;    ;;;;   ;    ;   ;;        ;    ;    ;     ;       ;     ;  ;   ;    ; 
+;        ;  ;;;;;;   ;         ;     ;;;;;     ;       ;       ;    ;;;;;; 
+;        ;  ;        ;         ;    ;    ;     ;       ;      ;     ;      
+;   ;;   ;  ;        ;         ;    ;   ;;     ;       ;     ;   ;  ;      
+;   ; ;;;    ;;;;;  ;;;;;    ;;;;;   ;;; ;;  ;;;;;   ;;;;;   ;;;;;   ;;;;; 
+;                                                                          
+;                               spectators                                           
+;                                                                          
+;                                                                          
+
+;;takes a struct of the serverworld, and returns a list tat has been symbolized
+
+
+
+(define (hashtagS s)
+  (define playerstring (extract-info-A (serverworld-players s)))
+  (define itemstring (extract-info-I (serverworld-items s)))
+  (define stringofinfo (list itemstring playerstring))
+   stringofinfo
+  )
+
+
+(define (extract-info-A listofplayers)
+  (cond
+    [(empty? listofplayers) '() ]
+    [(adventurer? (first listofplayers))
+     (list "adventurer"
+           (adventurer-name (first listofplayers))
+           (adventurer-health (first listofplayers))
+           (adventurer-direction (first listofplayers))
+           (location-x (adventurer-location (first listofplayers)))
+           (location-y (adventurer-location (first listofplayers)))
+           (extract-info-A (rest listofplayers))
+           )
+     ]
+    )
+  )
+
+(define (extract-info-I listofitems)
+  (cond
+    [(empty? listofitems) '() ]
+    [(item? (first listofitems))
+     (list "item"
+           (item-name (first listofitems))
+           (location-x (item-location (first listofitems)))
+           (location-y (item-location (first listofitems)))
+           (item-size (first listofitems))
+           (item-health (first listofitems))
+           (item-direction (first listofitems))
+           
+           (extract-info-I (rest listofitems))
+           )
+     ]
+    )
+  )
+
+
+;(struct renderworld (listofitemstorender) #:prefab)
+
+;; PlayUniverse -> [Bundle PlayUniverse [Listof [Mail StateMessage]]]
+;; bundle this universe, serialize it, broadcast it, and drop noone
+(define (broadcast-world s)
+  
+;;(list (serverworld-players s) (serverworld-items s))
+
+  
+  (define mails (broadcast (serverworld-spectators s) (flatten (hashtagS s))  ))
+  (make-bundle s mails empty))
+
+;; [Listof IWorlds] Message -> [Listof Mail]
+;; sends mail to all clients
+(define (broadcast iws msgs)
+  (map (lambda (iw) (make-mail iw msgs)) iws))
+
+
+
+;;(trace broadcast-world)
+;;(trace broadcast)
+
 
 
 
 ;; handle-server-disconnect
 
-(define (handle-server-disconnect s)
+(define (handle-server-disconnect s arg1)
   (if (empty? (serverworld-players s)) initial-server
       s
       )
@@ -244,7 +338,7 @@
 (define (remove-adventurer name listofplayers)
   (cond
     [(empty? listofplayers) '()]
-    [(= name (adventurer-name (first listofplayers))) (remove-adventurer name (rest listofplayers)) ]
+    [(string=? name (adventurer-name (first listofplayers))) (remove-adventurer name (rest listofplayers)) ]
     [(cons (first listofplayers) (remove-adventurer name (rest listofplayers)))]
     )
   )
@@ -254,7 +348,7 @@
 (define (select-adventurer name listofplayers)
    (cond
     [(empty? listofplayers) '()]
-    [(= name (adventurer-name (first listofplayers))) (first listofplayers)]
+    [(string=? name (adventurer-name (first listofplayers))) (first listofplayers)]
     [(select-adventurer name (rest listofplayers))]
     )
   )
@@ -267,13 +361,19 @@
 
 
 (define (handle-server-msg s client msg)
-  (define otherplayers (remove-adventurer (first msg) (serverworld-players s)))
-  (define player (select-adventurer (first msg) (serverworld-players s)))
+  (define otherplayers (remove-adventurer (iworld-name client) (serverworld-players s)))
+  (define player (select-adventurer (iworld-name client) (serverworld-players s)))
   
   (define WORLD (game-world (serverworld-map s) player (serverworld-items s))) 
-  (define OLDWORLD (move-adventurer WORLD (rest (first msg)))) ;;second part is the inputkey
+  (define OLDWORLD (move-adventurer WORLD msg)) ;;second part is the inputkey
 
-(serverworld (serverworld-map s) (cons (game-world-adventurer OLDWORLD) otherplayers) (game-world-items OLDWORLD) (serverworld-spectators s))
+  (define serverworldtorender (serverworld (serverworld-map s) (cons (game-world-adventurer OLDWORLD) otherplayers) (game-world-items OLDWORLD) (serverworld-spectators s)))
+
+
+(broadcast-world serverworldtorender)
+;;(make-mail to content)
+ 
+
   )
 
 
@@ -340,30 +440,30 @@
 
 (define (tick-tock s)
   (cond
-    [(waitingworld? s)
-            (if (= (length s) MAX_PLAYERS);;than
-                (swap-world-states s)
-                ;;else
-                s)
-            ]
-    [(serverworld? s) (tick-world s)]
+    [(and (waitingworld? s) (= (length (waitingworld-listofplayers s)) MAX_PLAYERS)) (swap-world-states s)]
+   [(waitingworld? s) s]
+    [(serverworld? s) (broadcast-world (tick-world s))]
+    [else s]
     )
   )
 
+
+;;(trace tick-tock)
 ;;this is essentially the intial world, so whatever items or things we want to appear in the beginning go here
 (define (swap-world-states s)
-  (serverworld DEFAULT_MAP (players-to-adventurers (waitingworld-listofplayers s)) STARTING_ITEMS empty))
+  (serverworld DEFAULT_MAP (players-to-adventurers (waitingworld-listofplayers s)) STARTING_ITEMS (waitingworld-listofplayers s)))
 
 
 
 (define (players-to-adventurers playerlist)
                                 (cond
                                   [(empty? playerlist) '() ]
-                                  [(cons (adventurer (first (first playerlist)) MAX_HEALTH empty "left" (STARTING_LOCATION) (RANDOM_ADVENTURER_IMAGE)) (players-to-adventurers (rest playerlist)))]))
+                                  [(iworld? (first playerlist)) (cons (adventurer (iworld-name (first playerlist))  MAX_HEALTH empty "left" (STARTING_LOCATION) (RANDOM_ADVENTURER_IMAGE)) (players-to-adventurers (rest playerlist)))]
+                                  )
+  )
 
-
-
-
+(trace swap-world-states)
+(trace players-to-adventurers)
           
           ;;ticks the world, basically just calls update item health on a list of items
 
@@ -591,7 +691,7 @@
 ;
 ;; -----------------------------------------------------------------------------
 
-(define (STARTING_LOCATION) (location (random 5 (- WIDTH-PX 5) (random 5 (- HEIGHT-PX 5)))))
+(define (STARTING_LOCATION) (location (random 5 (- WIDTH-PX 5)) (random 5 (- HEIGHT-PX 5))))
 
 (define (RANDOM_ADVENTURER_IMAGE) (color-change AVATAR-LEFT-IMG))
 
@@ -689,3 +789,4 @@
 ;;or your avatar image, Basically it find all RED (color 255 0 0 255) and replaces it with whatever new-color is. which currnently is a random color. i was having trouble with (read) and how it assigns things,
 ;;didnt want to have to do four seperate calls for an umber, but we might have to.
 
+(start-server)
